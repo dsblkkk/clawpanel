@@ -100,11 +100,59 @@ mod platform {
         (running, pid)
     }
 
+    /// launchctl 失败时的回退：直接通过 CLI spawn Gateway 进程
+    fn start_gateway_direct() -> Result<(), String> {
+        let enhanced = crate::commands::enhanced_path();
+
+        let log_dir = dirs::home_dir()
+            .unwrap_or_default()
+            .join(".openclaw")
+            .join("logs");
+        fs::create_dir_all(&log_dir).ok();
+
+        let stdout_log = fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(log_dir.join("gateway.log"))
+            .map_err(|e| format!("创建日志文件失败: {e}"))?;
+
+        let stderr_log = fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(log_dir.join("gateway.err.log"))
+            .map_err(|e| format!("创建错误日志文件失败: {e}"))?;
+
+        Command::new("openclaw")
+            .arg("gateway")
+            .env("PATH", &enhanced)
+            .stdin(std::process::Stdio::null())
+            .stdout(stdout_log)
+            .stderr(stderr_log)
+            .spawn()
+            .map_err(|e| {
+                if e.kind() == std::io::ErrorKind::NotFound {
+                    "OpenClaw CLI 未找到，请确认已安装并重启 ClawPanel。".to_string()
+                } else {
+                    format!("启动 Gateway 失败: {e}")
+                }
+            })?;
+
+        // 等 Gateway 初始化
+        std::thread::sleep(std::time::Duration::from_secs(2));
+        Ok(())
+    }
+
     pub fn start_service_impl(label: &str) -> Result<(), String> {
         let uid = current_uid()?;
         let path = plist_path(label);
         let domain_target = format!("gui/{}", uid);
         let service_target = format!("gui/{}/{}", uid, label);
+
+        // 先尝试 plist 文件是否存在
+        if !std::path::Path::new(&path).exists() {
+            // plist 不存在，直接用 CLI 启动
+            return start_gateway_direct();
+        }
 
         let bootstrap_out = Command::new("launchctl")
             .args(["bootstrap", &domain_target, &path])
@@ -114,7 +162,8 @@ mod platform {
         if !bootstrap_out.status.success() {
             let stderr = String::from_utf8_lossy(&bootstrap_out.stderr);
             if !stderr.contains("already bootstrapped") && !stderr.trim().is_empty() {
-                return Err(format!("启动 {label} 失败: {stderr}"));
+                // launchctl 失败（如 plist 二进制路径过期），回退到直接启动
+                return start_gateway_direct();
             }
         }
 
@@ -126,7 +175,8 @@ mod platform {
         if !kickstart_out.status.success() {
             let stderr = String::from_utf8_lossy(&kickstart_out.stderr);
             if !stderr.trim().is_empty() {
-                return Err(format!("kickstart {label} 失败: {stderr}"));
+                // kickstart 也失败，回退到直接启动
+                return start_gateway_direct();
             }
         }
 
@@ -161,6 +211,7 @@ mod platform {
         let domain_target = format!("gui/{}", uid);
         let service_target = format!("gui/{}/{}", uid, label);
 
+        // 先停
         let _ = Command::new("launchctl")
             .args(["bootout", &service_target])
             .output();
@@ -174,6 +225,11 @@ mod platform {
             std::thread::sleep(std::time::Duration::from_millis(200));
         }
 
+        // plist 不存在，直接用 CLI 启动
+        if !std::path::Path::new(&path).exists() {
+            return start_gateway_direct();
+        }
+
         let bootstrap_out = Command::new("launchctl")
             .args(["bootstrap", &domain_target, &path])
             .output()
@@ -182,7 +238,8 @@ mod platform {
         if !bootstrap_out.status.success() {
             let stderr = String::from_utf8_lossy(&bootstrap_out.stderr);
             if !stderr.contains("already bootstrapped") && !stderr.trim().is_empty() {
-                return Err(format!("重启 {label} 失败 (bootstrap): {stderr}"));
+                // launchctl 失败，回退到直接启动
+                return start_gateway_direct();
             }
         }
 
@@ -194,7 +251,8 @@ mod platform {
         if !kickstart_out.status.success() {
             let stderr = String::from_utf8_lossy(&kickstart_out.stderr);
             if !stderr.trim().is_empty() {
-                return Err(format!("重启 {label} 失败 (kickstart): {stderr}"));
+                // kickstart 也失败，回退到直接启动
+                return start_gateway_direct();
             }
         }
 

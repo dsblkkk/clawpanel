@@ -5,6 +5,12 @@
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.4.8] - 2026-03-06
+
+### 修复 (Bug Fixes)
+
+- **macOS Gateway 启动失败 (Bootstrap failed: 5)** — plist 二进制路径过期（如 nvm/fnm 切版本后）导致 `launchctl bootstrap` 报 I/O error。新增回退机制：launchctl 失败时自动改用 CLI 直接启动 Gateway，启动和重启均适用
+
 ## [0.4.7] - 2026-03-06
 
 ### 修复 (Bug Fixes)
