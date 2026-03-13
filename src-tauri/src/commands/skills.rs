@@ -16,7 +16,9 @@ pub async fn skills_list() -> Result<Value, String> {
     match output {
         Ok(o) if o.status.success() => {
             let stdout = String::from_utf8_lossy(&o.stdout);
-            serde_json::from_str(&stdout).map_err(|e| format!("解析失败: {e}"))
+            // CLI output may contain non-JSON lines (Node warnings, update prompts).
+            // Extract the first valid JSON object or array from stdout.
+            extract_json(&stdout).ok_or_else(|| "解析失败: 输出中未找到有效 JSON".to_string())
         }
         _ => {
             // CLI 不可用时，兜底扫描本地 skills 目录
@@ -40,7 +42,7 @@ pub async fn skills_info(name: String) -> Result<Value, String> {
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    serde_json::from_str(&stdout).map_err(|e| format!("解析详情失败: {e}"))
+    extract_json(&stdout).ok_or_else(|| "解析详情失败: 输出中未找到有效 JSON".to_string())
 }
 
 /// 检查 Skills 依赖状态（openclaw skills check --json）
@@ -58,7 +60,7 @@ pub async fn skills_check() -> Result<Value, String> {
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    serde_json::from_str(&stdout).map_err(|e| format!("解析失败: {e}"))
+    extract_json(&stdout).ok_or_else(|| "解析失败: 输出中未找到有效 JSON".to_string())
 }
 
 /// 安装 Skill 依赖（根据 install spec 执行 brew/npm/go/uv/download）
@@ -216,6 +218,29 @@ pub async fn skills_clawhub_search(query: String) -> Result<Value, String> {
         .collect();
 
     Ok(Value::Array(items))
+}
+
+/// Extract the first valid JSON object or array from a string that may contain
+/// non-JSON lines (Node.js warnings, npm update prompts, etc.)
+fn extract_json(text: &str) -> Option<Value> {
+    // Try parsing the whole string first (fast path)
+    if let Ok(v) = serde_json::from_str::<Value>(text) {
+        return Some(v);
+    }
+    // Find the first '{' or '[' and try parsing from there
+    for (i, ch) in text.char_indices() {
+        if ch == '{' || ch == '[' {
+            if let Ok(v) = serde_json::from_str::<Value>(&text[i..]) {
+                return Some(v);
+            }
+            // Try with a streaming deserializer to handle trailing content
+            let mut de = serde_json::Deserializer::from_str(&text[i..]).into_iter::<Value>();
+            if let Some(Ok(v)) = de.next() {
+                return Some(v);
+            }
+        }
+    }
+    None
 }
 
 /// CLI 不可用时的兜底：扫描 ~/.openclaw/skills 目录
