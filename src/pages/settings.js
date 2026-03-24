@@ -5,6 +5,8 @@
 import { api } from '../lib/tauri-api.js'
 import { toast } from '../components/toast.js'
 import { showConfirm } from '../components/modal.js'
+import { t, getLang, setLang, getAvailableLangs, onLangChange } from '../lib/i18n.js'
+import { renderSidebar } from '../components/sidebar.js'
 
 const isTauri = !!window.__TAURI_INTERNALS__
 
@@ -45,8 +47,18 @@ export async function render() {
     </div>
 
     <div class="config-section" id="openclaw-dir-section">
-      <div class="config-section-title">OpenClaw 安装路径</div>
+      <div class="config-section-title">${t('settings.openclawDir')}</div>
       <div id="openclaw-dir-bar"><div class="stat-card loading-placeholder" style="height:48px"></div></div>
+    </div>
+
+    <div class="config-section" id="cli-binding-section">
+      <div class="config-section-title">${t('settings.openclawCli')}</div>
+      <div id="cli-binding-bar"><div class="stat-card loading-placeholder" style="height:48px"></div></div>
+    </div>
+
+    <div class="config-section" id="language-section">
+      <div class="config-section-title">${t('settings.language')}</div>
+      <div id="language-bar"></div>
     </div>
 
   `
@@ -57,9 +69,10 @@ export async function render() {
 }
 
 async function loadAll(page) {
-  const tasks = [loadProxyConfig(page), loadModelProxyConfig(page), loadOpenclawDir(page)]
+  const tasks = [loadProxyConfig(page), loadModelProxyConfig(page), loadOpenclawDir(page), loadCliBinding(page)]
   tasks.push(loadRegistry(page))
   await Promise.all(tasks)
+  loadLanguageSwitcher(page)
 }
 
 // ===== 网络代理 =====
@@ -243,6 +256,12 @@ function bindEvents(page) {
         case 'reset-openclaw-dir':
           await handleResetOpenclawDir(page)
           break
+        case 'bind-cli':
+          await handleBindCli(page, btn.dataset.path)
+          break
+        case 'unbind-cli':
+          await handleUnbindCli(page)
+          break
       }
     } catch (e) {
       toast(e.toString(), 'error')
@@ -323,4 +342,110 @@ async function handleSaveRegistry(page) {
   if (!registry) { toast('请输入源地址', 'error'); return }
   await api.setNpmRegistry(registry)
   toast('npm 源已保存', 'success')
+}
+
+// ===== CLI 绑定 =====
+
+async function loadCliBinding(page) {
+  const bar = page.querySelector('#cli-binding-bar')
+  if (!bar) return
+  try {
+    const version = await api.getVersionInfo()
+    const cfg = await api.readPanelConfig()
+    const boundPath = cfg?.openclawCliPath || ''
+    const installations = version.all_installations || []
+    const currentPath = version.cli_path || ''
+
+    const sourceLabel = (src) => ({
+      standalone: t('dashboard.cliSourceStandalone'),
+      'npm-zh': t('dashboard.cliSourceNpmZh'),
+      'npm-official': t('dashboard.cliSourceNpmOfficial'),
+      'npm-global': t('dashboard.cliSourceNpmGlobal'),
+    })[src] || t('dashboard.cliSourceUnknown')
+
+    let html = `<div class="form-hint" style="margin-bottom:var(--space-sm)">${t('settings.cliBindHint')}</div>`
+
+    if (currentPath) {
+      html += `<div style="margin-bottom:var(--space-sm);font-size:var(--font-size-sm)">
+        <span style="color:var(--text-secondary)">${t('settings.cliCurrent')}:</span>
+        <code style="font-size:var(--font-size-xs)">${escapeHtml(currentPath)}</code>
+        ${boundPath ? `<span class="clawhub-badge" style="margin-left:var(--space-xs);background:rgba(99,102,241,0.14);color:#6366f1;font-size:var(--font-size-xs)">${t('settings.cliBound')}</span>` : ''}
+      </div>`
+    }
+
+    if (installations.length > 0) {
+      html += '<div style="display:flex;flex-direction:column;gap:var(--space-xs)">'
+      // Auto-detect option
+      html += `<div style="display:flex;align-items:center;gap:var(--space-sm);padding:6px 10px;border-radius:var(--radius-sm);border:1px solid var(--border);${!boundPath ? 'background:var(--bg-active);border-color:var(--accent)' : ''}">
+        <span style="flex:1;font-size:var(--font-size-sm)">${t('settings.cliAutoDetect')}</span>
+        ${boundPath ? '<button class="btn btn-secondary btn-xs" data-action="unbind-cli">' + t('common.reset') + '</button>' : '<span style="color:var(--success);font-size:var(--font-size-xs)">✓ ' + t('settings.cliActive') + '</span>'}
+      </div>`
+      for (const inst of installations) {
+        const isActive = inst.active
+        const isBound = boundPath && inst.path === boundPath
+        html += `<div style="display:flex;align-items:center;gap:var(--space-sm);padding:6px 10px;border-radius:var(--radius-sm);border:1px solid var(--border);${isBound ? 'background:var(--bg-active);border-color:var(--accent)' : ''}">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:var(--font-size-xs);font-family:var(--font-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(inst.path)}">${escapeHtml(inst.path)}</div>
+            <div style="font-size:11px;color:var(--text-tertiary)">${sourceLabel(inst.source)}${inst.version ? ' · v' + inst.version : ''}</div>
+          </div>
+          ${isBound ? '<span style="color:var(--success);font-size:var(--font-size-xs)">✓ ' + t('settings.cliBound') + '</span>' : `<button class="btn btn-secondary btn-xs" data-action="bind-cli" data-path="${escapeHtml(inst.path)}">${t('common.confirm')}</button>`}
+        </div>`
+      }
+      html += '</div>'
+    } else {
+      html += `<div style="color:var(--text-tertiary);font-size:var(--font-size-sm)">${t('common.noData')}</div>`
+    }
+
+    bar.innerHTML = html
+  } catch (e) {
+    bar.innerHTML = `<div style="color:var(--error)">${t('common.loadFailed')}: ${escapeHtml(String(e))}</div>`
+  }
+}
+
+async function handleBindCli(page, path) {
+  if (!path) return
+  const ok = await showConfirm(t('settings.cliSwitchConfirm'))
+  if (!ok) return
+  const cfg = await api.readPanelConfig()
+  cfg.openclawCliPath = path
+  await api.writePanelConfig(cfg)
+  toast(t('common.saveSuccess'), 'success')
+  await loadCliBinding(page)
+}
+
+async function handleUnbindCli(page) {
+  const cfg = await api.readPanelConfig()
+  delete cfg.openclawCliPath
+  await api.writePanelConfig(cfg)
+  toast(t('common.saveSuccess'), 'success')
+  await loadCliBinding(page)
+}
+
+// ===== 语言切换 =====
+
+function loadLanguageSwitcher(page) {
+  const bar = page.querySelector('#language-bar')
+  if (!bar) return
+  const langs = getAvailableLangs()
+  const current = getLang()
+  bar.innerHTML = `
+    <div style="display:flex;align-items:center;gap:var(--space-sm);flex-wrap:wrap">
+      <select class="form-input" id="lang-select" style="max-width:200px">
+        ${langs.map(l => `<option value="${l.code}" ${l.code === current ? 'selected' : ''}>${l.label}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-hint" style="margin-top:var(--space-xs)">${t('settings.languageHint')}</div>
+  `
+  const select = bar.querySelector('#lang-select')
+  select.onchange = () => {
+    setLang(select.value)
+    // Re-render sidebar + current page
+    const sidebarEl = document.getElementById('sidebar')
+    if (sidebarEl) renderSidebar(sidebarEl)
+    // Re-render settings page
+    const pageEl = page.closest('.page') || page
+    render().then(newPage => {
+      pageEl.replaceWith(newPage)
+    }).catch(() => {})
+  }
 }

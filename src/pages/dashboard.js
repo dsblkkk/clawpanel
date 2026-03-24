@@ -5,6 +5,7 @@ import { api } from '../lib/tauri-api.js'
 import { toast } from '../components/toast.js'
 import { onGatewayChange } from '../lib/app-state.js'
 import { navigate } from '../router.js'
+import { t } from '../lib/i18n.js'
 
 let _unsubGw = null
 
@@ -14,8 +15,8 @@ export async function render() {
 
   page.innerHTML = `
     <div class="page-header">
-      <h1 class="page-title">仪表盘</h1>
-      <p class="page-desc">OpenClaw 运行状态概览</p>
+      <h1 class="page-title">${t('dashboard.title')}</h1>
+      <p class="page-desc">${t('dashboard.desc')}</p>
     </div>
     <div class="stat-cards" id="stat-cards">
       <div class="stat-card loading-placeholder"></div>
@@ -27,12 +28,12 @@ export async function render() {
     </div>
     <div id="dashboard-overview-container"></div>
     <div class="quick-actions">
-      <button class="btn btn-secondary" id="btn-restart-gw">重启 Gateway</button>
-      <button class="btn btn-secondary" id="btn-check-update">检查更新</button>
-      <button class="btn btn-secondary" id="btn-create-backup">创建备份</button>
+      <button class="btn btn-secondary" id="btn-restart-gw">${t('dashboard.restartGw')}</button>
+      <button class="btn btn-secondary" id="btn-check-update">${t('dashboard.checkUpdate')}</button>
+      <button class="btn btn-secondary" id="btn-create-backup">${t('dashboard.createBackup')}</button>
     </div>
     <div class="config-section">
-      <div class="config-section-title">最近日志</div>
+      <div class="config-section-title">${t('dashboard.recentLogs')}</div>
       <div class="log-viewer" id="recent-logs" style="max-height:300px"></div>
     </div>
   `
@@ -144,8 +145,13 @@ function renderStatCards(page, services, version, agents, config) {
   const gw = services.find(s => s.label === 'ai.openclaw.gateway')
   const runningCount = services.filter(s => s.running).length
   const versionMeta = version.recommended
-    ? `${version.ahead_of_recommended ? `当前版本高于推荐稳定版 ${version.recommended}，可能不稳定` : version.is_recommended ? '稳定版 ' + version.recommended : '推荐稳定版 ' + version.recommended}${version.latest_update_available && version.latest ? ' · 最新上游 ' + version.latest : ''}`
-    : (version.latest_update_available && version.latest ? '最新上游: ' + version.latest : '版本信息未获取')
+    ? `${version.ahead_of_recommended ? t('dashboard.versionAhead', { version: version.recommended }) : version.is_recommended ? t('dashboard.versionStable', { version: version.recommended }) : t('dashboard.versionRecommend', { version: version.recommended })}${version.latest_update_available && version.latest ? ' · ' + t('dashboard.versionLatest', { version: version.latest }) : ''}`
+    : (version.latest_update_available && version.latest ? t('dashboard.versionLatest', { version: version.latest }) : t('dashboard.versionUnknown'))
+
+  // CLI 路径信息
+  const cliSourceLabel = { standalone: t('dashboard.cliSourceStandalone'), 'npm-zh': t('dashboard.cliSourceNpmZh'), 'npm-official': t('dashboard.cliSourceNpmOfficial'), 'npm-global': t('dashboard.cliSourceNpmGlobal') }[version.cli_source] || t('dashboard.cliSourceUnknown')
+  const installCount = version.all_installations?.length || 0
+  const multiInstall = installCount > 1
 
   const defaultAgent = agents.find(a => a.id === 'main')?.name || 'main'
   const modelCount = config?.models?.providers ? Object.values(config.models.providers).reduce((acc, p) => acc + (p.models?.length || 0), 0) : 0
@@ -154,47 +160,48 @@ function renderStatCards(page, services, version, agents, config) {
   cardsEl.innerHTML = `
     <div class="stat-card">
       <div class="stat-card-header">
-        <span class="stat-card-label">Gateway</span>
+        <span class="stat-card-label">${t('dashboard.gateway')}</span>
         <span class="status-dot ${gw?.running ? 'running' : 'stopped'}"></span>
       </div>
-      <div class="stat-card-value">${gw?.running ? '运行中' : '已停止'}</div>
-      <div class="stat-card-meta">${gw?.pid ? 'PID: ' + gw.pid : (gw?.running ? '端口检测' : '未启动')}</div>
+      <div class="stat-card-value">${gw?.running ? t('common.running') : t('common.stopped')}</div>
+      <div class="stat-card-meta">${gw?.pid ? 'PID: ' + gw.pid : (gw?.running ? t('dashboard.portDetect') : t('dashboard.notStarted'))}</div>
     </div>
     <div class="stat-card">
       <div class="stat-card-header">
-        <span class="stat-card-label">版本 · ${version.source === 'official' ? '官方' : '汉化'}</span>
+        <span class="stat-card-label">${t('dashboard.versionLabel')} · ${version.source === 'official' ? t('dashboard.versionOfficial') : t('dashboard.versionChinese')}</span>
       </div>
-      <div class="stat-card-value">${version.current || '未知'}</div>
+      <div class="stat-card-value">${version.current || t('common.unknown')}</div>
       <div class="stat-card-meta">${versionMeta}</div>
+      ${version.cli_path ? `<div class="stat-card-meta" style="margin-top:2px;font-size:11px;opacity:0.7" title="${escapeHtml(version.cli_path)}">${cliSourceLabel}${multiInstall ? ' · <span style="color:var(--warning)">' + t('dashboard.installCount', { count: installCount }) + '</span>' : ''}</div>` : ''}
     </div>
     <div class="stat-card">
       <div class="stat-card-header">
-        <span class="stat-card-label">Agent 舰队</span>
+        <span class="stat-card-label">${t('dashboard.agentFleet')}</span>
       </div>
-      <div class="stat-card-value">${agents.length} 个</div>
-      <div class="stat-card-meta">默认: ${defaultAgent}</div>
+      <div class="stat-card-value">${agents.length} ${t('common.unit')}</div>
+      <div class="stat-card-meta">${t('dashboard.defaultAgent')}: ${defaultAgent}</div>
     </div>
     <div class="stat-card">
       <div class="stat-card-header">
-        <span class="stat-card-label">模型池</span>
+        <span class="stat-card-label">${t('dashboard.modelPool')}</span>
       </div>
-      <div class="stat-card-value">${modelCount} 个</div>
-      <div class="stat-card-meta">基于 ${providerCount} 个渠道商</div>
+      <div class="stat-card-value">${modelCount} ${t('common.unit')}</div>
+      <div class="stat-card-meta">${t('dashboard.basedOnProviders', { count: providerCount })}</div>
     </div>
     <div class="stat-card">
       <div class="stat-card-header">
-        <span class="stat-card-label">基础服务</span>
+        <span class="stat-card-label">${t('dashboard.baseServices')}</span>
       </div>
       <div class="stat-card-value">${runningCount}/${services.length}</div>
-      <div class="stat-card-meta">存活率 ${services.length ? Math.round(runningCount / services.length * 100) : 0}%</div>
+      <div class="stat-card-meta">${t('common.survivalRate')} ${services.length ? Math.round(runningCount / services.length * 100) : 0}%</div>
     </div>
-    <div class="stat-card stat-card-clickable" id="card-control-ui" title="打开 OpenClaw 原生控制面板">
+    <div class="stat-card stat-card-clickable" id="card-control-ui" title="${t('dashboard.controlUIDesc')}">
       <div class="stat-card-header">
-        <span class="stat-card-label">Control UI</span>
+        <span class="stat-card-label">${t('dashboard.controlUI')}</span>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14" style="opacity:0.5"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
       </div>
-      <div class="stat-card-value" style="font-size:var(--font-size-sm)">OpenClaw 原生面板</div>
-      <div class="stat-card-meta">${gw?.running ? '点击打开浏览器' : 'Gateway 未运行'}</div>
+      <div class="stat-card-value" style="font-size:var(--font-size-sm)">${t('dashboard.controlUIDesc')}</div>
+      <div class="stat-card-meta">${gw?.running ? t('dashboard.controlUIClick') : t('dashboard.controlUINotRunning')}</div>
     </div>
   `
 }

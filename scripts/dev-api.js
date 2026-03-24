@@ -2939,6 +2939,24 @@ const handlers = {
     const current = getLocalOpenclawVersion()
     const latest = await getLatestVersionFor(source)
     const recommended = recommendedVersionFor(source)
+
+    // CLI 路径解析（Web 模式下用 which/where）
+    let cli_path = null
+    let cli_source = null
+    try {
+      const { execSync } = require('child_process')
+      const cmd = process.platform === 'win32' ? 'where openclaw' : 'which openclaw'
+      const out = execSync(cmd, { timeout: 3000 }).toString().trim()
+      cli_path = out.split('\n')[0]?.trim() || null
+      if (cli_path) {
+        const lower = cli_path.replace(/\\/g, '/').toLowerCase()
+        if (lower.includes('/programs/openclaw/') || lower.includes('/openclaw-bin/') || lower.includes('/opt/openclaw/')) cli_source = 'standalone'
+        else if (lower.includes('openclaw-zh') || lower.includes('@qingchencloud')) cli_source = 'npm-zh'
+        else if (lower.includes('/npm/') || lower.includes('/node_modules/')) cli_source = 'npm-official'
+        else cli_source = 'unknown'
+      }
+    } catch {}
+
     return {
       current,
       latest,
@@ -2948,7 +2966,10 @@ const handlers = {
       is_recommended: !!current && !!recommended && versionsMatch(current, recommended),
       ahead_of_recommended: !!current && !!recommended && recommendedIsNewer(current, recommended),
       panel_version: PANEL_VERSION,
-      source
+      source,
+      cli_path,
+      cli_source,
+      all_installations: null
     }
   },
 

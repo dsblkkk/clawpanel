@@ -1365,6 +1365,16 @@ pub async fn get_version_info() -> Result<VersionInfo, String> {
         (Some(c), Some(r)) => recommended_is_newer(c, r),
         _ => false,
     };
+
+    // 解析当前实际使用的 CLI 路径
+    let cli_path = crate::utils::resolve_openclaw_cli_path();
+    let cli_source = cli_path
+        .as_ref()
+        .map(|p| crate::utils::classify_cli_source(p));
+
+    // 扫描所有可检测到的 OpenClaw 安装
+    let all_installations = scan_all_installations(&cli_path);
+
     Ok(VersionInfo {
         current,
         latest,
@@ -1375,7 +1385,146 @@ pub async fn get_version_info() -> Result<VersionInfo, String> {
         ahead_of_recommended,
         panel_version: panel_version().to_string(),
         source,
+        cli_path,
+        cli_source,
+        all_installations: Some(all_installations),
     })
+}
+
+/// 扫描系统中所有可检测到的 OpenClaw 安装
+fn scan_all_installations(
+    active_path: &Option<String>,
+) -> Vec<crate::models::types::OpenClawInstallation> {
+    use crate::models::types::OpenClawInstallation;
+    let mut results: Vec<OpenClawInstallation> = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+
+    let mut try_add = |path: std::path::PathBuf| {
+        if !path.exists() {
+            return;
+        }
+        let canonical = path
+            .canonicalize()
+            .unwrap_or_else(|_| path.clone())
+            .to_string_lossy()
+            .to_string();
+        if seen.contains(&canonical) {
+            return;
+        }
+        seen.insert(canonical.clone());
+        let path_str = path.to_string_lossy().to_string();
+        let source = crate::utils::classify_cli_source(&path_str);
+        let version = read_version_from_installation(&path);
+        let is_active = active_path
+            .as_ref()
+            .map(|a| {
+                let a_canon = std::path::Path::new(a)
+                    .canonicalize()
+                    .unwrap_or_else(|_| std::path::PathBuf::from(a))
+                    .to_string_lossy()
+                    .to_string();
+                a_canon == canonical
+            })
+            .unwrap_or(false);
+        results.push(OpenClawInstallation {
+            path: path_str,
+            source,
+            version,
+            active: is_active,
+        });
+    };
+
+    // standalone 安装目录
+    for sa_dir in all_standalone_dirs() {
+        #[cfg(target_os = "windows")]
+        try_add(sa_dir.join("openclaw.cmd"));
+        #[cfg(not(target_os = "windows"))]
+        try_add(sa_dir.join("openclaw"));
+    }
+
+    // npm 全局目录
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(appdata) = std::env::var("APPDATA") {
+            try_add(
+                std::path::PathBuf::from(&appdata)
+                    .join("npm")
+                    .join("openclaw.cmd"),
+            );
+        }
+    }
+
+    // PATH 中找到的所有 openclaw
+    let enhanced = super::enhanced_path();
+    #[cfg(target_os = "windows")]
+    let sep = ';';
+    #[cfg(not(target_os = "windows"))]
+    let sep = ':';
+    for dir in enhanced.split(sep) {
+        let dir = dir.trim();
+        if dir.is_empty() {
+            continue;
+        }
+        let base = std::path::Path::new(dir);
+        #[cfg(target_os = "windows")]
+        {
+            try_add(base.join("openclaw.cmd"));
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            try_add(base.join("openclaw"));
+        }
+    }
+
+    results
+}
+
+/// 从安装路径附近读取版本信息
+fn read_version_from_installation(cli_path: &std::path::Path) -> Option<String> {
+    // 尝试从同目录的 VERSION 文件读取
+    if let Some(dir) = cli_path.parent() {
+        let version_file = dir.join("VERSION");
+        if let Ok(content) = std::fs::read_to_string(&version_file) {
+            for line in content.lines() {
+                if let Some(ver) = line.strip_prefix("openclaw_version=") {
+                    let ver = ver.trim();
+                    if !ver.is_empty() {
+                        return Some(ver.to_string());
+                    }
+                }
+            }
+        }
+        // 尝试从 package.json 读取
+        for pkg_name in &["@qingchencloud/openclaw-zh", "openclaw"] {
+            let pkg_json = dir.join("node_modules").join(pkg_name).join("package.json");
+            if let Ok(content) = std::fs::read_to_string(&pkg_json) {
+                if let Some(ver) = serde_json::from_str::<serde_json::Value>(&content)
+                    .ok()
+                    .and_then(|v| v.get("version")?.as_str().map(String::from))
+                {
+                    return Some(ver);
+                }
+            }
+        }
+        // npm shim 情况：向上查找 node_modules
+        if let Some(parent) = dir.parent() {
+            for pkg_name in &["@qingchencloud/openclaw-zh", "openclaw"] {
+                let pkg_json = parent
+                    .join("node_modules")
+                    .join(pkg_name)
+                    .join("package.json");
+                if let Ok(content) = std::fs::read_to_string(&pkg_json) {
+                    if let Some(ver) = serde_json::from_str::<serde_json::Value>(&content)
+                        .ok()
+                        .and_then(|v| v.get("version")?.as_str().map(String::from))
+                    {
+                        return Some(ver);
+                    }
+                }
+            }
+        }
+    }
+    None
 }
 
 /// 获取 OpenClaw 运行时状态摘要（openclaw status --json）

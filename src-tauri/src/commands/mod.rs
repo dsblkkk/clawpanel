@@ -85,7 +85,7 @@ fn panel_config_path() -> PathBuf {
     default_openclaw_dir().join("clawpanel.json")
 }
 
-fn read_panel_config_value() -> Option<serde_json::Value> {
+pub fn read_panel_config_value() -> Option<serde_json::Value> {
     std::fs::read_to_string(panel_config_path())
         .ok()
         .and_then(|content| serde_json::from_str(&content).ok())

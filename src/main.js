@@ -14,6 +14,7 @@ import { api, checkBackendHealth, isBackendOnline, onBackendStatusChange } from 
 import { version as APP_VERSION } from '../package.json'
 import { statusIcon } from './lib/icons.js'
 import { tryShowEngagement } from './components/engagement.js'
+import { initI18n } from './lib/i18n.js'
 
 // 样式
 import './style/variables.css'
@@ -27,8 +28,9 @@ import './style/debug.css'
 import './style/assistant.css'
 import './style/ai-drawer.css'
 
-// 初始化主题
+// 初始化主题 + 国际化
 initTheme()
+initI18n()
 
 /** HTML 转义，防止 XSS 注入 */
 function escapeHtml(str) {

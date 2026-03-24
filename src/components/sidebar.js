@@ -7,70 +7,71 @@ import { isOpenclawReady, getActiveInstance, switchInstance, onInstanceChange } 
 import { api } from '../lib/tauri-api.js'
 import { toast } from './toast.js'
 import { version as APP_VERSION } from '../../package.json'
+import { t } from '../lib/i18n.js'
 
-const NAV_ITEMS_FULL = [
+function NAV_ITEMS_FULL() { return [
   {
-    section: '概览',
+    section: t('sidebar.sectionMonitor'),
     items: [
-      { route: '/dashboard', label: '仪表盘', icon: 'dashboard' },
-      { route: '/assistant', label: '晴辰助手', icon: 'assistant' },
-      { route: '/chat', label: '实时聊天', icon: 'chat' },
-      { route: '/services', label: '服务管理', icon: 'services' },
-      { route: '/logs', label: '日志查看', icon: 'logs' },
+      { route: '/dashboard', label: t('sidebar.dashboard'), icon: 'dashboard' },
+      { route: '/assistant', label: t('sidebar.assistant'), icon: 'assistant' },
+      { route: '/chat', label: t('sidebar.chat'), icon: 'chat' },
+      { route: '/services', label: t('sidebar.services'), icon: 'services' },
+      { route: '/logs', label: t('sidebar.logs'), icon: 'logs' },
     ]
   },
   {
-    section: '配置',
+    section: t('sidebar.sectionConfig'),
     items: [
-      { route: '/models', label: '模型配置', icon: 'models' },
-      { route: '/agents', label: 'Agent 管理', icon: 'agents' },
-      { route: '/gateway', label: 'Gateway', icon: 'gateway' },
-      { route: '/channels', label: '消息渠道', icon: 'channels' },
-      { route: '/communication', label: '通信与自动化', icon: 'settings' },
-      { route: '/security', label: '安全设置', icon: 'security' },
+      { route: '/models', label: t('sidebar.models'), icon: 'models' },
+      { route: '/agents', label: t('sidebar.agents'), icon: 'agents' },
+      { route: '/gateway', label: t('sidebar.gateway'), icon: 'gateway' },
+      { route: '/channels', label: t('sidebar.channels'), icon: 'channels' },
+      { route: '/communication', label: t('sidebar.communication'), icon: 'settings' },
+      { route: '/security', label: t('sidebar.security'), icon: 'security' },
     ]
   },
   {
-    section: '数据',
+    section: t('sidebar.sectionData'),
     items: [
-      { route: '/memory', label: '记忆文件', icon: 'memory' },
-      { route: '/cron', label: '定时任务', icon: 'clock' },
-      { route: '/usage', label: '使用情况', icon: 'bar-chart' },
+      { route: '/memory', label: t('sidebar.memory'), icon: 'memory' },
+      { route: '/cron', label: t('sidebar.cron'), icon: 'clock' },
+      { route: '/usage', label: t('sidebar.usage'), icon: 'bar-chart' },
     ]
   },
   {
-    section: '扩展',
+    section: t('sidebar.sectionExtension'),
     items: [
-      { route: '/skills', label: 'Skills', icon: 'skills' },
+      { route: '/skills', label: t('sidebar.skills'), icon: 'skills' },
     ]
   },
   {
     section: '',
     items: [
-      { route: '/settings', label: '面板设置', icon: 'settings' },
-      { route: '/chat-debug', label: '系统诊断', icon: 'debug' },
-      { route: '/about', label: '关于', icon: 'about' },
+      { route: '/settings', label: t('sidebar.settings'), icon: 'settings' },
+      { route: '/chat-debug', label: t('sidebar.chatDebug'), icon: 'debug' },
+      { route: '/about', label: t('sidebar.about'), icon: 'about' },
     ]
   }
-]
+] }
 
-const NAV_ITEMS_SETUP = [
+function NAV_ITEMS_SETUP() { return [
   {
     section: '',
     items: [
-      { route: '/setup', label: '初始设置', icon: 'setup' },
-      { route: '/assistant', label: '晴辰助手', icon: 'assistant' },
+      { route: '/setup', label: t('sidebar.setup'), icon: 'setup' },
+      { route: '/assistant', label: t('sidebar.assistant'), icon: 'assistant' },
     ]
   },
   {
     section: '',
     items: [
-      { route: '/settings', label: '面板设置', icon: 'settings' },
-      { route: '/chat-debug', label: '系统诊断', icon: 'debug' },
-      { route: '/about', label: '关于', icon: 'about' },
+      { route: '/settings', label: t('sidebar.settings'), icon: 'settings' },
+      { route: '/chat-debug', label: t('sidebar.chatDebug'), icon: 'debug' },
+      { route: '/about', label: t('sidebar.about'), icon: 'about' },
     ]
   }
-]
+] }
 
 const ICONS = {
   setup: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>',
@@ -152,7 +153,7 @@ export function renderSidebar(el) {
     <nav class="sidebar-nav">
   `
 
-  const navItems = isOpenclawReady() ? NAV_ITEMS_FULL : NAV_ITEMS_SETUP
+  const navItems = isOpenclawReady() ? NAV_ITEMS_FULL() : NAV_ITEMS_SETUP()
 
   for (const section of navItems) {
     html += `<div class="nav-section">
@@ -179,7 +180,7 @@ export function renderSidebar(el) {
     <div class="sidebar-footer">
       <div class="nav-item" id="btn-theme-toggle">
         ${isDark ? sunIcon : moonIcon}
-        <span>${isDark ? '日间模式' : '夜间模式'}</span>
+        <span>${isDark ? t('sidebar.themeLight') : t('sidebar.themeDark')}</span>
       </div>
       <div class="sidebar-meta">
         <a href="https://claw.qt.cool" target="_blank" rel="noopener" class="sidebar-link">claw.qt.cool</a>
@@ -240,8 +241,8 @@ export function renderSidebar(el) {
           opt.style.opacity = '0.5'
           switchInstance(id).then(() => {
             const inst = getActiveInstance()
-            const desc = inst.type === 'local' ? '本机' : inst.name
-            toast(`已切换到 ${desc} — 模型配置、Agent 等将管理该实例`, 'success')
+            const desc = inst.type === 'local' ? t('instance.local') : inst.name
+            toast(t('instance.switchedTo', { name: desc }), 'success')
             renderSidebar(el)
             reloadCurrentRoute()
           })
@@ -301,19 +302,19 @@ async function _toggleInstanceDropdown(sidebarEl) {
   if (!dd) return
   if (dd.classList.contains('open')) { dd.classList.remove('open'); return }
 
-  dd.innerHTML = '<div style="padding:8px;color:var(--text-tertiary);font-size:12px">加载中...</div>'
+  dd.innerHTML = `<div style="padding:8px;color:var(--text-tertiary);font-size:12px">${t('common.loading')}</div>`
   dd.classList.add('open')
 
   try {
     const [data, health] = await Promise.all([api.instanceList(), api.instanceHealthAll()])
     const healthMap = Object.fromEntries((health || []).map(h => [h.id, h]))
     const activeId = getActiveInstance().id
-    let html = '<div class="instance-hint">切换后，模型配置、Agent 等页面将管理对应实例</div>'
+    let html = `<div class="instance-hint">${t('instance.switchHint')}</div>`
     for (const inst of data.instances) {
       const h = healthMap[inst.id] || {}
       const active = inst.id === activeId ? ' active' : ''
       const dot = h.online !== false ? 'online' : 'offline'
-      const badge = inst.type === 'docker' ? '<span class="instance-badge docker">Docker</span>' : inst.type === 'remote' ? '<span class="instance-badge remote">远程</span>' : ''
+      const badge = inst.type === 'docker' ? `<span class="instance-badge docker">${t('instance.docker')}</span>` : inst.type === 'remote' ? `<span class="instance-badge remote">${t('instance.remote')}</span>` : ''
       const port = inst.endpoint ? inst.endpoint.match(/:(\d+)/)?.[1] : ''
       const portTag = port ? `<span class="instance-port">:${port}</span>` : ''
       html += `<div class="instance-option${active}" data-id="${inst.id}">
@@ -321,11 +322,11 @@ async function _toggleInstanceDropdown(sidebarEl) {
         <span class="instance-opt-name">${_escSidebar(inst.name)}</span>
         ${portTag}
         ${badge}
-        ${active ? '<span class="instance-active-tag">当前</span>' : ''}
+        ${active ? `<span class="instance-active-tag">${t('instance.current')}</span>` : ''}
       </div>`
     }
     html += '<div class="instance-divider"></div>'
-    html += '<div class="instance-option instance-add" id="btn-instance-add">+ 添加实例</div>'
+    html += `<div class="instance-option instance-add" id="btn-instance-add">+ ${t('instance.addInstance')}</div>`
     dd.innerHTML = html
   } catch (e) {
     dd.innerHTML = `<div style="padding:8px;color:var(--error);font-size:12px">${_escSidebar(e.message)}</div>`
@@ -337,27 +338,27 @@ async function _showAddInstanceDialog(sidebarEl) {
   overlay.className = 'docker-dialog-overlay'
   overlay.innerHTML = `
     <div class="docker-dialog">
-      <div class="docker-dialog-title">添加远程实例</div>
+      <div class="docker-dialog-title">${t('instance.addRemote')}</div>
       <div class="form-group" style="margin-bottom:var(--space-md)">
-        <label class="form-label">名称</label>
-        <input class="form-input" id="inst-name" placeholder="远程服务器" />
+        <label class="form-label">${t('instance.nameLabel')}</label>
+        <input class="form-input" id="inst-name" placeholder="${t('instance.namePlaceholder')}" />
       </div>
       <div class="form-group" style="margin-bottom:var(--space-md)">
-        <label class="form-label">面板地址</label>
+        <label class="form-label">${t('instance.endpointLabel')}</label>
         <input class="form-input" id="inst-endpoint" placeholder="http://192.168.1.100:1420" />
       </div>
       <div class="form-group" style="margin-bottom:var(--space-md)">
-        <label class="form-label">Gateway 端口（可选）</label>
+        <label class="form-label">${t('instance.gwPortLabel')}</label>
         <input class="form-input" id="inst-gw-port" type="number" value="18789" />
       </div>
       <div class="docker-dialog-hint">
-        远程服务器需要运行 ClawPanel (serve.js)。<br/>
-        示例: <code>http://192.168.1.100:1420</code>
+        ${t('instance.remoteHint')}<br/>
+        ${t('instance.example')}: <code>http://192.168.1.100:1420</code>
       </div>
       <div id="inst-add-error" style="color:var(--error);font-size:12px;margin-top:var(--space-sm)"></div>
       <div class="docker-dialog-actions">
-        <button class="btn btn-secondary btn-sm" id="inst-cancel">取消</button>
-        <button class="btn btn-primary btn-sm" id="inst-confirm">添加</button>
+        <button class="btn btn-secondary btn-sm" id="inst-cancel">${t('common.cancel')}</button>
+        <button class="btn btn-primary btn-sm" id="inst-confirm">${t('common.add')}</button>
       </div>
     </div>
   `
@@ -369,16 +370,16 @@ async function _showAddInstanceDialog(sidebarEl) {
     const endpoint = overlay.querySelector('#inst-endpoint').value.trim()
     const gwPort = parseInt(overlay.querySelector('#inst-gw-port').value) || 18789
     const errEl = overlay.querySelector('#inst-add-error')
-    if (!name || !endpoint) { errEl.textContent = '请填写名称和面板地址'; return }
+    if (!name || !endpoint) { errEl.textContent = t('instance.nameRequired'); return }
     const btn = overlay.querySelector('#inst-confirm')
-    btn.disabled = true; btn.textContent = '添加中...'
+    btn.disabled = true; btn.textContent = t('instance.adding')
     try {
       await api.instanceAdd({ name, type: 'remote', endpoint, gatewayPort: gwPort })
       overlay.remove()
       renderSidebar(sidebarEl)
     } catch (e) {
       errEl.textContent = e.message || String(e)
-      btn.disabled = false; btn.textContent = '添加'
+      btn.disabled = false; btn.textContent = t('common.add')
     }
   }
 }
