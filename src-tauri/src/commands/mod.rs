@@ -287,7 +287,13 @@ fn build_enhanced_path() -> String {
                     .collect();
                 dirs.sort_by(|a, b| b.file_name().cmp(&a.file_name()));
                 for entry in dirs {
-                    extra.push(entry.path().join("installation/bin").to_string_lossy().to_string());
+                    extra.push(
+                        entry
+                            .path()
+                            .join("installation/bin")
+                            .to_string_lossy()
+                            .to_string(),
+                    );
                 }
             }
         }
@@ -353,7 +359,13 @@ fn build_enhanced_path() -> String {
                     .collect();
                 dirs.sort_by(|a, b| b.file_name().cmp(&a.file_name()));
                 for entry in dirs {
-                    extra.push(entry.path().join("installation/bin").to_string_lossy().to_string());
+                    extra.push(
+                        entry
+                            .path()
+                            .join("installation/bin")
+                            .to_string_lossy()
+                            .to_string(),
+                    );
                 }
             }
         }
